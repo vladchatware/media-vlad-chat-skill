@@ -1,95 +1,67 @@
-# media.vlad.chat API reference
+# media.vlad.chat — service reference
 
-Reference for the HTTP endpoints and MCP tools exposed by a running
-`media.vlad.chat` instance. Base URL: `http://localhost:3000`.
+Reference for using the live `media.vlad.chat` service to generate social media
+content. Base URL: **`https://media.vlad.chat`**. No API key or local setup is
+needed.
 
-## Transport
+## Two ways to invoke
 
-- REST endpoints live under `/api/*` and accept `GET` with query parameters.
-- The MCP server is at `/api/mcp` (streamable HTTP) and exposes the same
-  capabilities as registered tools.
-- All REST endpoints respond `200` with `{ "runId": "<id>" }` immediately. The
-  requested work executes asynchronously in a background workflow.
+1. **MCP tools** — connect an MCP client to `https://media.vlad.chat/api/mcp`.
+   Tools are self-describing and the preferred interface for agents.
+2. **HTTP endpoints** — direct `GET` requests for scripting or quick tests.
 
-## REST endpoints
+## Content types and what you get
 
-### `GET /api/story`
+| Content type | Tool (MCP) | Endpoint | Output |
+| ------------ | ---------- | -------- | ------ |
+| Story video | `generate_story` | `GET /api/story?prompt=...` | Narrated story with image slides, voiceover per line, captions, rendered MP4 |
+| Carousel | `generate_carousel` | `GET /api/carousel?prompt=...` | Story + cover image rendered as carousel frames |
+| Tweet video | `generate_tweet` | `GET /api/tweet?content=...&voice=...` | Voiced tweet, vertical MP4 |
+| Thread video | `generate_thread` | `GET /api/thread?content=...&voice=...` | Voiced thread, vertical MP4 |
+| AI video | `generate_video` | `GET /api/video?prompt=...` | Sora-generated visuals + dialogue, assembled MP4 |
+| Transition video | `render_track_transitions` | MCP only | Vertical transition-review videos for SoundCloud track pairs |
 
-Starts the story workflow. Generates a narrative dialogue between a person and
-their shadow, an image slide, per-line voiceovers, and word-timed captions, then
-renders the full Story composition to an MP4.
+## Tool schemas (MCP)
 
-| Param | Type | Required | Description |
-| ----- | ---- | -------- | ----------- |
-| `prompt` | string | yes | Story prompt or theme |
+### generate_story
 
-### `GET /api/carousel`
+- `prompt` (string, required) — the story prompt or theme
 
-Generates a story and a cover image, then renders the Carousel composition as a
-sequence of JPEG frames.
+### generate_carousel
 
-| Param | Type | Required | Description |
-| ----- | ---- | -------- | ----------- |
-| `prompt` | string | yes | Carousel prompt or theme |
+- `prompt` (string, required) — the carousel prompt or theme
 
-### `GET /api/tweet`
+### generate_tweet
 
-Voices the given content with TTS and renders a vertical tweet MP4.
+- `content` (string, required) — tweet text to voice over
+- `voice` (`"ash" \| "onyx"`, default `"ash"`) — `ash` = teacher, `onyx` = student
 
-| Param | Type | Required | Description |
-| ----- | ---- | -------- | ----------- |
-| `content` | string | yes | Tweet text to voice over |
-| `voice` | `ash` \| `onyx` | yes | `ash` = teacher, `onyx` = student |
+### generate_thread
 
-### `GET /api/thread`
+- `content` (string, required) — thread text to voice over
+- `voice` (`"ash" \| "onyx"`, default `"ash"`) — `ash` = teacher, `onyx` = student
 
-Voices the given content and renders a vertical thread MP4.
+### generate_video
 
-| Param | Type | Required | Description |
-| ----- | ---- | -------- | ----------- |
-| `content` | string | yes | Thread text to voice over |
-| `voice` | `ash` \| `onyx` | yes | `ash` = teacher, `onyx` = student |
+- `prompt` (string, required) — the video prompt or theme
 
-### `GET /api/video`
+### render_track_transitions
 
-Full AI video workflow. Generates a story, per-segment Sora video clips
-(`video-<n>.mp4`), voiceovers (`speech-<n>.mp3`), and captions
-(`captions-<n>.json`), then renders the assembled Video composition.
+- `outgoingTrackId` (integer > 0, required) — the outgoing SoundCloud track
+- `candidateTrackIds` (array of integers 1–12, required) — candidate tracks to
+  transition into
+- `energyArc` (`"preserve" \| "build" \| "release" \| "reset"`, default `"preserve"`)
 
-| Param | Type | Required | Description |
-| ----- | ---- | -------- | ----------- |
-| `prompt` | string | yes | Video prompt or theme |
+## Response
 
-## MCP tools
+Every invocation returns a run ID immediately; the work runs in the background.
 
-Connect an MCP client to `http://localhost:3000/api/mcp`. Registered tools:
+```json
+{ "runId": "wf_abc123" }
+```
 
-| Tool | Inputs | Description |
-| ---- | ------ | ----------- |
-| `generate_story` | `prompt: string` | Start story generation |
-| `generate_carousel` | `prompt: string` | Start carousel generation |
-| `generate_tweet` | `content: string`, `voice: "ash" \| "onyx" = "ash"` | Start tweet video |
-| `generate_thread` | `content: string`, `voice: "ash" \| "onyx" = "ash"` | Start thread video |
-| `generate_video` | `prompt: string` | Start AI video generation |
-| `render_track_transitions` | `outgoingTrackId: int > 0`, `candidateTrackIds: int[] (1-12)`, `energyArc: "preserve" \| "build" \| "release" \| "reset" = "preserve"` | Render vertical transition-review videos for one outgoing SoundCloud track vs candidate tracks |
+## Where finished media appears
 
-Each tool returns a text result containing the `runId`. Generation runs in the
-background.
-
-## Output locations (server filesystem)
-
-| Directory | Contents | Served at |
-| --------- | -------- | --------- |
-| `public/` | `slide-<n>.png`, `speech-<n>.mp3`, `captions-<n>.json`, `video-<n>.mp4`, `sound.m4a`, `pic.jpeg` | `http://localhost:3000/<filename>` |
-| `out/` | Rendered MP4s, PNG stills, JPEG frame sequences, transition videos | — |
-| `stories/` | Structured story JSON, named by story | — |
-
-## Workflow behavior
-
-- Workflows are orchestrated with the `workflow` package (`"use workflow"` /
-  `"use step"` directives). Starting one returns a `runId` immediately.
-- Render jobs POST to `http://localhost:3001/api/render` with a composition id
-  (`Story`, `Carousel`, `Tweet`, `Thread`, `Video`, `BackroomTransitionOnly`),
-  `inputProps`, and a render type (`video` | `still` | `sequence`).
-- Completion is signaled by files appearing in `public/` and `out/` — there is
-  no polling/status API.
+Generated files are written to the service and served publicly. Assets are
+available at `https://media.vlad.chat/<filename>` (e.g. `slide-0.png`,
+`speech-0.mp3`, rendered MP4s). Check that location for the finished result.

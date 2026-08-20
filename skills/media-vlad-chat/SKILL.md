@@ -1,97 +1,105 @@
 ---
 name: media-vlad-chat
-description: Generate AI-powered social media content through the media.vlad.chat API. Use when the user wants to create short-form social content — stories, carousels, tweets, threads, or AI videos — by calling a running media.vlad.chat instance. Also use when the user mentions "vlad.chat", "vladchat", "media.vlad.chat", "generate a story", "generate a carousel", "generate a tweet video", "generate a thread video", "generate an AI video", "render a transition video", or "start a content generation workflow". Covers the HTTP REST endpoints, the MCP tool interface, and where rendered outputs are written. Requires the service to be running locally (Next.js on :3000, Bun renderer on :3001) and an OpenAI API key.
+description: Generate AI-powered short-form social media content through the live media.vlad.chat service. Use when the user wants to create content like a narrated story video, a carousel post, a tweet video, a thread video, or a full AI-generated video by describing an idea or prompt. Also use when the user mentions "vlad.chat", "media.vlad.chat", "generate a story", "make a carousel", "turn this tweet into a video", "turn this thread into a video", "make an AI video", or "create social content". The skill tells the agent how to invoke the live service, which content types are available, how to pick the right one for the user's idea, and how to get the finished result. No local setup or API keys are required — the service runs at https://media.vlad.chat.
 metadata:
-  tags: media, video, content-generation, ai, remotion, api
+  tags: media, social-media, content-generation, video, ai, stories
 ---
 
 # media.vlad.chat
 
-The `media.vlad.chat` API is a content-generation engine that composes short-form
-social media content (images, audio, captions, and videos) using AI services and
-renders visual compositions with Remotion.
+A live AI content studio that turns an idea into finished social media content.
+You send it a prompt, it writes the story or script, generates images, voiceover
+audio, captions, and even video clips, then renders it into shareable media
+(MP4s, images, carousels).
 
-This skill tells an agent how to invoke the running service, what each endpoint
-generates, and where the finished assets and videos land.
+This is a **product skill**: it teaches an agent how to act as a user of the
+service, not how to run or extend its codebase.
 
 ## When to use
 
-Use this skill whenever the user asks to generate social content through a
-running media.vlad.chat instance — e.g. "make a story about X", "create a tweet
-video", "build a carousel", "generate a thread", "generate an AI video", or
-"render transition videos".
+Use this skill when the user wants to produce social media content. If they say
+things like:
 
-## Prerequisites
+- "I want a story video about *[topic]*"
+- "Make a carousel post for my brand about *[topic]*"
+- "Turn this tweet into a video" or "read this tweet aloud"
+- "Turn this thread into a video"
+- "Generate an AI video of *[scene/idea]*"
+- "Create content for my Instagram/TikTok/Twitter/Threads"
 
-The service must be running and reachable before any request will do real work:
+…then this skill tells you how to get it made through the live service.
 
-1. Next.js API server on port **3000**: `npm run dev`
-2. Bun renderer on port **3001**: `npm run serve:render`
-3. `OPENAI_API_KEY` set in `.env` (required for all AI generation)
+## How it works
 
-## Quick start
+1. The user describes what they want (a topic, a script, an existing tweet or
+   thread, or just a vibe).
+2. The agent picks the right content type (below) and calls the service.
+3. The service generates everything in the background: script/story, images,
+   voiceover audio, captions, and/or video clips.
+4. Finished media is written to the service and served back to the user at a
+   shareable URL.
+
+## Content types
+
+| Want this…                    | Use tool / endpoint            | You get                                                                 |
+| ------------------------------ | ------------------------------ | ----------------------------------------------------------------------- |
+| A narrated story video         | `generate_story` / `/api/story` | Story with image slides, per-line voiceovers, captions, rendered MP4     |
+| A carousel for a feed          | `generate_carousel` / `/api/carousel` | Story content + cover image, rendered as carousel frames          |
+| A tweet read aloud             | `generate_tweet` / `/api/tweet` | Voiced tweet, rendered as a vertical MP4                                |
+| A thread read aloud            | `generate_thread` / `/api/thread` | Voiced thread, rendered as a vertical MP4                             |
+| A full AI video                | `generate_video` / `/api/video` | AI-generated visuals (Sora) + dialogue, assembled into an MP4            |
+| Transition video for music     | `render_track_transitions` (MCP only) | Vertical transition-review videos for SoundCloud track pairs   |
+
+## How to invoke the service
+
+The cleanest way is through the MCP tools at **`https://media.vlad.chat/api/mcp`**.
+If the agent has an MCP client, connect it and call the tools directly — the
+tools are self-describing. Alternatively, call the HTTP endpoints directly:
 
 ```bash
-# Start a story generation workflow (returns immediately with a runId)
-curl "http://localhost:3000/api/story?prompt=two%20friends%20meet%20at%20a%20cafe"
+# Story video
+curl "https://media.vlad.chat/api/story?prompt=two%20friends%20reunite%20at%20a%20cafe"
 
-# Start a tweet video (voice: ash | onyx)
-curl "http://localhost:3000/api/tweet?content=your%20tweet&voice=ash"
+# Carousel post
+curl "https://media.vlad.chat/api/carousel?prompt=productivity%20hacks"
 
-# Start a carousel post
-curl "http://localhost:3000/api/carousel?prompt=productivity%20hacks"
+# Tweet video (voice: ash=teacher, onyx=student)
+curl "https://media.vlad.chat/api/tweet?content=your%20tweet%20text&voice=ash"
 
-# Start a thread video
-curl "http://localhost:3000/api/thread?content=your%20thread&voice=onyx"
+# Thread video
+curl "https://media.vlad.chat/api/thread?content=your%20thread&voice=onyx"
 
-# Start a full AI video (Sora visuals + dialogue)
-curl "http://localhost:3000/api/video?prompt=a%20cyberpunk%20city"
+# Full AI video
+curl "https://media.vlad.chat/api/video?prompt=a%20cybernetic%20city%20at%20sunrise"
 ```
 
-All endpoints are **asynchronous**: they start a background workflow and return a
-`runId` immediately. Do not expect a finished file in the response — poll the
-output locations below until assets appear.
+Each call returns a run ID immediately and the work continues in the background.
 
-## What you can generate
+## Guiding the user
 
-| Endpoint      | Outputs                                                                 |
-| ------------- | ----------------------------------------------------------------------- |
-| `/api/story`  | Narrative dialogue (person + shadow), image slide, per-line voiceover MP3s + word-timed caption JSON, and a rendered Story MP4 |
-| `/api/carousel` | Story content + one generated cover image, rendered as a JPEG sequence |
-| `/api/tweet`  | A single voiced tweet, rendered as a vertical MP4                       |
-| `/api/thread` | A voiced thread, rendered as a vertical MP4                             |
-| `/api/video`  | Full AI video with per-segment Sora clips (`video-<n>.mp4`), voiceovers, captions, assembled MP4 |
-| `/api/mcp`    | Same capabilities via MCP tools (`generate_story`, `generate_carousel`, `generate_tweet`, `generate_thread`, `generate_video`, `render_track_transitions`) |
+- Help the user choose the right content type: a personal message works well as
+  a story; a product or tips list works well as a carousel; existing tweets or
+  threads convert directly into voiced videos; a cinematic idea suits a full AI
+  video.
+- For tweet/thread videos, offer the voice choice: **ash** (warm teacher) or
+  **onyx** (energetic student).
+- Generation takes a little while — tell the user it's working and share the
+  finished media URL when it's ready.
 
-## Where outputs go
+## Where the result lives
 
-All artifacts are written to the server's local filesystem:
-
-- **`public/`** — AI-generated assets: `slide-<n>.png`, `speech-<n>.mp3`,
-  `captions-<n>.json`, `video-<n>.mp4`. Because Next.js serves `public/`, each
-  file is immediately fetchable at `http://localhost:3000/<filename>`.
-- **`out/`** — finished rendered media (MP4s, stills, JPEG sequences) with
-  timestamped names, plus any custom-named outputs like
-  `transition-<outId>-to-<candId>-<energyArc>.mp4`.
-- **`stories/`** — structured story JSON saved by name.
-
-After kicking off a workflow, check these directories for new files to determine
-completion. There is no status endpoint — file appearance is the signal.
-
-## MCP interface
-
-If the caller has an MCP client, connect it to `http://localhost:3000/api/mcp`
-to call the tools directly instead of raw HTTP. The full tool input/output
-schemas are in [references/api.md](references/api.md).
+Generated media is written to the service and served publicly. Once a job
+finishes, the finished video or image is available at a `media.vlad.chat` URL
+(the raw assets are served from `https://media.vlad.chat/<filename>`). Fetch or
+share that URL with the user.
 
 ## Troubleshooting
 
-- **Requests succeed but no files appear** — the background workflow may be
-  erroring. Check the console logs of both the Next.js (`npm run dev`) and Bun
-  renderer (`npm run serve:render`) terminals. Workflows are async, so errors
-  surface in logs, not in the HTTP response.
-- **Renderer failures** — confirm the Bun server is up on :3001 and FFmpeg is
-  installed (`ffmpeg -version`).
-- **AI generation errors** — verify `OPENAI_API_KEY`, model access, and quota.
-- **Disk pressure** — generated assets accumulate in `public/` and `out/`;
-  clean them periodically.
+- **Nothing appears after a while** — generation runs in the background; recheck
+  the output location or have the user retry with a clearer prompt.
+- **Errors on invocation** — the service needs a valid prompt (or `content` +
+  `voice` for tweet/thread). Re-read the tool schema for the exact required
+  inputs.
+- **Service unreachable** — if `https://media.vlad.chat` does not respond, the
+  service may be down; the agent can offer to run a local instance from the
+  source repo instead.
