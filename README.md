@@ -3,11 +3,6 @@
 Agent skill for generating AI-powered social media content through the live
 [media.vlad.chat](https://media.vlad.chat) service.
 
-This repo exists purely to distribute the skill — it contains no application
-code. The service itself runs at https://media.vlad.chat and the source lives in
-the main [media.vlad.chat](https://github.com/vladchatware/media.vlad.chat)
-repository.
-
 ## Install
 
 ```bash
