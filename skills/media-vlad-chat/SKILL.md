@@ -48,7 +48,7 @@ things like:
 | A tweet read aloud             | `generate_tweet` / `/api/tweet` | Voiced tweet, rendered as a vertical MP4                                |
 | A thread read aloud            | `generate_thread` / `/api/thread` | Voiced thread, rendered as a vertical MP4                             |
 | A full AI video                | `generate_video` / `/api/video` | AI-generated visuals (Sora) + dialogue, assembled into an MP4            |
-| Transition video for music     | `render_track_transitions` (MCP only) | Vertical transition-review videos for SoundCloud track pairs   |
+| Transition video for music     | `render_track_transitions` (MCP only) | Vertical transition-review videos: 1 outgoing track + up to 12 candidates |
 
 ## How to invoke the service
 
@@ -88,10 +88,11 @@ Each call returns a run ID immediately and the work continues in the background.
 
 ## Where the result lives
 
-Generated media is written to the service and served publicly. Once a job
-finishes, the finished video or image is available at a `media.vlad.chat` URL
-(the raw assets are served from `https://media.vlad.chat/<filename>`). Fetch or
-share that URL with the user.
+Generation runs in the background. Poll `workflow_status` with the run ID
+until it completes, then read `workflow_result` — each finished entry carries
+a direct-download `blobUrl` and a public `media.vlad.chat` URL. Share that
+URL (or the downloaded file) with the user. See
+`references/api.md` → "Response and result retrieval" for the full flow.
 
 ## Troubleshooting
 

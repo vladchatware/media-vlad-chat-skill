@@ -10,6 +10,11 @@ needed.
    Tools are self-describing and the preferred interface for agents.
 2. **HTTP endpoints** — direct `GET` requests for scripting or quick tests.
 
+MCP invocation notes: the endpoint is Streamable HTTP — send JSON-RPC POSTs
+with `Accept: application/json, text/event-stream`. Lifecycle notifications
+(`initialize`, `notifications/initialized`) may return empty bodies; ignore
+empty responses instead of treating them as errors.
+
 ## Content types and what you get
 
 | Content type | Tool (MCP) | Endpoint | Output |
@@ -47,12 +52,17 @@ needed.
 
 ### render_track_transitions
 
-- `outgoingTrackId` (integer > 0, required) — the outgoing SoundCloud track
-- `candidateTrackIds` (array of integers 1–12, required) — candidate tracks to
-  transition into
+- `outgoingTrackId` (integer > 0, required) — the outgoing track (music.vlad.chat ID)
+- `candidateTrackIds` (array of integers, 1–12 entries, required) — candidate
+  tracks to transition into (one render per candidate — 1 outgoing + N
+  candidates, not pairs)
 - `energyArc` (`"preserve" \| "build" \| "release" \| "reset"`, default `"preserve"`)
 
-## Response
+Missing candidate analyses are scheduled automatically — callers do not need
+to pre-analyze tracks, but a batch with un-analyzed candidates takes
+correspondingly longer (analysis runs before rendering).
+
+## Response and result retrieval
 
 Every invocation returns a run ID immediately; the work runs in the background.
 
@@ -60,8 +70,32 @@ Every invocation returns a run ID immediately; the work runs in the background.
 { "runId": "wf_abc123" }
 ```
 
+Poll over MCP until finished, then fetch results:
+
+- `workflow_status` — arg `run_id` (string). Returns RUNNING / COMPLETED / FAILED.
+- `workflow_progress` — arg `run_id`. Fine-grained step progress while RUNNING.
+- `workflow_result` — arg `run_id`. Finished-media entries, each with a
+  `blobUrl` (direct download) and a `url` (public page URL). Treat `blobUrl`
+  entries as the completion signal — a "scheduled" status alone is not
+  completion.
+- `workflow_cancel` — arg `run_id`. Stops a pending/running run.
+
+Notes:
+
+- Tool arguments use snake_case (`run_id`), even though the invoke response
+  says `runId`.
+- Typical wall-clock: tweet/thread ≈ 1 min per item;
+  `render_track_transitions` ≈ 2 min per candidate in the batch.
+
 ## Where finished media appears
 
-Generated files are written to the service and served publicly. Assets are
-available at `https://media.vlad.chat/<filename>` (e.g. `slide-0.png`,
-`speech-0.mp3`, rendered MP4s). Check that location for the finished result.
+Generated files are written to the service and served publicly. The exact
+location depends on the content type — the reliable way is to read
+`workflow_result` for the finished run: each entry carries a `blobUrl` and a
+public `url`.
+
+- Story/carousel assets: `https://media.vlad.chat/<filename>`
+  (e.g. `slide-0.png`, `speech-0.mp3`, rendered MP4s).
+- Transition/backroom renders:
+  `https://media.vlad.chat/public/renders/<...>.mp4` plus a direct-download
+  `blobUrl` on the Vercel Blob store.
